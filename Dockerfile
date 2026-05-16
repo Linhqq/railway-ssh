@@ -1,53 +1,58 @@
 FROM ubuntu:22.04
 
+ENV DEBIAN_FRONTEND=noninteractive
+
 # -----------------------------
-# Install required packages
+# Install packages
 # -----------------------------
-RUN apt update && apt install -y \
+RUN apt update && apt install -y --no-install-recommends \
     openssh-server \
     curl \
     wget \
     unzip \
     sudo \
     python3 \
-    && mkdir /var/run/sshd
+    ca-certificates \
+    && apt clean && rm -rf /var/lib/apt/lists/*
 
 # -----------------------------
-# Create user 'user' with sudo
+# Create user
 # -----------------------------
-RUN useradd -m trthaodev && echo "trthaodev:thaodev@" | chpasswd && adduser trthaodev sudo
+RUN useradd -m -s /bin/bash trthaodev && \
+    echo "trthaodev:thaodev" | chpasswd && \
+    adduser trthaodev sudo
 
 # -----------------------------
-# Configure SSH
+# SSH setup
 # -----------------------------
-RUN echo 'PasswordAuthentication yes' >> /etc/ssh/sshd_config && \
-    echo 'PermitRootLogin yes' >> /etc/ssh/sshd_config && \
-    echo 'ClientAliveInterval 60' >> /etc/ssh/sshd_config && \
-    echo 'ClientAliveCountMax 3' >> /etc/ssh/sshd_config
+RUN mkdir -p /var/run/sshd
+
+RUN sed -i 's/#PasswordAuthentication yes/PasswordAuthentication yes/' /etc/ssh/sshd_config && \
+    sed -i 's/#PermitRootLogin prohibit-password/PermitRootLogin yes/' /etc/ssh/sshd_config && \
+    echo "UsePAM yes" >> /etc/ssh/sshd_config && \
+    echo "ClientAliveInterval 60" >> /etc/ssh/sshd_config && \
+    echo "ClientAliveCountMax 3" >> /etc/ssh/sshd_config
 
 # -----------------------------
-# Download Ngrok v3
+# Install ngrok v3
 # -----------------------------
-RUN wget https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-v3-stable-linux-amd64.tgz && \
-    tar -xzf ngrok-v3-stable-linux-amd64.tgz && mv ngrok /usr/local/bin/
+RUN wget -q https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-v3-stable-linux-amd64.tgz && \
+    tar -xzf ngrok-v3-stable-linux-amd64.tgz && \
+    mv ngrok /usr/local/bin/ngrok && \
+    rm ngrok-v3-stable-linux-amd64.tgz
 
 # -----------------------------
-# Copy start script
+# Copy startup script
 # -----------------------------
-COPY start-ngrok-ssh.sh /usr/local/bin/start-ngrok-ssh.sh
-RUN chmod +x /usr/local/bin/start-ngrok-ssh.sh
+COPY start-ngrok-ssh.sh /start-ngrok-ssh.sh
+RUN chmod +x /start-ngrok-ssh.sh
 
 # -----------------------------
-# Expose ports
+# Ports
 # -----------------------------
-# Web server for Railway keep-alive
-EXPOSE 8080
-# SSH
-EXPOSE 22
-# Optional ports for aaPanel or FTP
-EXPOSE 14489 888 80 443 20 21
+EXPOSE 22 8080
 
 # -----------------------------
 # Start container
 # -----------------------------
-CMD ["/usr/local/bin/start-ngrok-ssh.sh"]
+CMD ["/start-ngrok-ssh.sh"]
